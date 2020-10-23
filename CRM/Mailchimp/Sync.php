@@ -877,12 +877,12 @@ class CRM_Mailchimp_Sync {
     }
     else {
       // For real, not dry run.
-	  // We are not unsubcribing Mailchimp members from CiviCRM now since it is no longer reversible from the API.
-	  /*
+    // We are not unsubcribing Mailchimp members from CiviCRM now since it is no longer reversible from the API.
+    /*
       foreach ($removals as $email) {
         $operations[] = ['PATCH', $url_prefix . md5(strtolower($email)), ['status' => 'unsubscribed']];
       }
-	  */
+    */
     }
 
     if (!$this->dry_run && !empty($operations)) {
@@ -1274,7 +1274,8 @@ class CRM_Mailchimp_Sync {
    * details in CiviCRM.
    *
    */
-  public function updateMailchimpFromCiviSingleContact($contact_id) {
+  public function updateMailchimpFromCiviSingleContact($contact_id, $has_session = TRUE) {
+    $messages = [];
     $customFields = self::getProfileFieldsToSync();
     $return =  ['first_name', 'last_name', 'email_id', 'email', 'group', 'street_address', 'supplemental_address_1', 'city', 'state_province', 'postal_code', 'country', 'tag'];
     $return = $customFields ? array_merge($return, array_keys($customFields)) : $return;
@@ -1301,14 +1302,20 @@ class CRM_Mailchimp_Sync {
 
       // They are not currently a member.
       // We are not unsubscribing Mailchimp members from CiviCRM now.
-      CRM_Core_Session::setStatus(ts('This email is not in CiviCRM group now but exists in Mailchimp list; any differences will remain until this is unsubscribed in Mailchimp.'));
+      $message = ts('This email is not in CiviCRM group now but exists in Mailchimp list; any differences will remain until this is unsubscribed in Mailchimp.');
+      if ($has_session) {
+        CRM_Core_Session::setStatus($message);
+      }
+      else {
+        $messages[] = $message;
+      }
       return;
       // We should ensure they are unsubscribed from Mailchimp. They might
       // already be, but as we have no way of telling exactly what just changed
       // at our end, we have to make sure.
       //
       // Nb. we don't bother updating their interests for unsubscribes.
-	  /*
+    /*
       try {
         $result = $api->patch("/lists/$this->list_id/members/$subscriber_hash",
           ['status' => 'unsubscribed']);
@@ -1324,7 +1331,7 @@ class CRM_Mailchimp_Sync {
       catch (CRM_Mailchimp_NetworkErrorException $e) {
         CRM_Core_Session::setStatus(ts('There was a network problem trying to unsubscribe this contact at Mailchimp; any differences will remain until a CiviCRM to Mailchimp Sync is done.'));
       }
-	  */
+    */
       return;
     }
 
@@ -1377,10 +1384,22 @@ class CRM_Mailchimp_Sync {
       $result = $api->put("/lists/$this->list_id/members/$subscriber_hash", $data);
     }
     catch (CRM_Mailchimp_RequestErrorException $e) {
-      CRM_Core_Session::setStatus(ts('There was a problem trying to subscribe this contact at Mailchimp:') . $e->getMessage());
+      $message = ts('There was a problem trying to subscribe this contact at Mailchimp:') . $e->getMessage();
+      if ($has_session) {
+        CRM_Core_Session::setStatus($message);
+      }
+      else {
+        $messages[] = $message;
+      }
     }
     catch (CRM_Mailchimp_NetworkErrorException $e) {
-      CRM_Core_Session::setStatus(ts('There was a network problem trying to unsubscribe this contact at Mailchimp; any differences will remain until a CiviCRM to Mailchimp Sync is done.'));
+      $message = ts('There was a network problem trying to unsubscribe this contact at Mailchimp; any differences will remain until a CiviCRM to Mailchimp Sync is done.');
+      if ($has_session) {
+        CRM_Core_Session::setStatus($message);
+      }
+      else {
+        $messages[] = $message;
+      }
     }
     // check if syncTags is enabled in mailchimp setting
     $syncTag = Civi::settings()->get('mailchimp_sync_tags');
@@ -1401,13 +1420,26 @@ class CRM_Mailchimp_Sync {
         try {
           $result = $api->post("/lists/$this->list_id/members/$subscriber_hash/tags", array('tags' => $tagsParams));
         } catch (CRM_Mailchimp_RequestErrorException $e) {
-          CRM_Core_Session::setStatus(ts('There was a problem trying to sync tags of this contact at Mailchimp:') . $e->getMessage());
+          $message = ts('There was a problem trying to sync tags of this contact at Mailchimp:') . $e->getMessage();
+          if ($has_session) {
+            CRM_Core_Session::setStatus($message);
+          }
+          else {
+            $messages[] = $message;
+          }
         }
         catch (CRM_Mailchimp_NetworkErrorException $e) {
-          CRM_Core_Session::setStatus(ts('There was a network problem trying to add tags of this contact at Mailchimp; any differences will remain until a CiviCRM to Mailchimp Sync is done.'));
+          $message = ts('There was a network problem trying to add tags of this contact at Mailchimp; any differences will remain until a CiviCRM to Mailchimp Sync is done.');
+          if ($has_session) {
+            CRM_Core_Session::setStatus($message);
+          }
+          else {
+            $messages[] = $message;
+          }
         }
       }
     }
+    return $messages;
   }
   /**
    * Identify a contact who is expected to be subscribed to this list.

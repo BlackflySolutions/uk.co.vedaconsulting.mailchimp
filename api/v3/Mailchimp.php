@@ -267,3 +267,44 @@ function civicrm_api3_mailchimp_getcivicrmgroupmailchimpsettings($params) {
   return civicrm_api3_create_success($groups);
 }
 
+
+/**
+ * CiviCRM to Mailchimp Push Single
+ *
+ * @param array $params
+ * @return array API result descriptor
+ * @see civicrm_api3_create_success
+ * @see civicrm_api3_create_error
+ * @throws API_Exception
+ */ 
+function _civicrm_api3_mailchimp_pushsingle_spec(&$spec) {
+  $spec['contact_id'] = [
+    'name' => 'contact_id',
+    'title' => 'CiviCRM Contact Id',
+    'api.required' => 1,
+    'type' => 1
+  ];
+  $spec['list_id'] = [
+    'name' => 'list_id',
+    'title' => 'Mailchimp List Id',
+    'api.required' => 1,
+  ];
+}
+
+function civicrm_api3_mailchimp_pushsingle($params) {
+  // Do push of single contact from CiviCRM to mailchimp
+  $sync = new CRM_Mailchimp_Sync($params['list_id']);
+  $result = $sync->updateMailchimpFromCiviSingleContact($params['contact_id'], FALSE);
+  CRM_Mailchimp_Utils::checkDebug('SyncSingleContact', $result);
+
+  if ($result['is_error'] == 0) {
+    return civicrm_api3_create_success(explode(',',$result));
+  }
+  else {
+    if (isset($result['exception']) && $result['exception'] instanceof Exception) {
+      return civicrm_api3_create_error($result['exception']->getMessage());
+    }
+    return civicrm_api3_create_error('Unknown error');
+  }
+}
+
